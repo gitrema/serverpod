@@ -104,6 +104,17 @@ class Server implements RouterInjectable {
   /// addition to the [httpResponseHeaders] when the request method is OPTIONS.
   final Headers httpOptionsResponseHeaders;
 
+  /// List of middleware to process HTTP requests.
+  /// Middleware is executed in the order it appears in this list.
+  ///
+  /// This list is immutable to ensure the middleware pipeline remains
+  /// consistent after server construction.
+  ///
+  /// **Note:** WebSocket upgrade requests (`/websocket`, `/v1/websocket`)
+  /// bypass middleware entirely as they require direct access to the
+  /// connection upgrade mechanism.
+  final List<Middleware> _middleware;
+
   /// Creates a new [Server] object.
   Server({
     required this.serverpod,
@@ -120,10 +131,13 @@ class Server implements RouterInjectable {
     required this.endpoints,
     required this.httpResponseHeaders,
     required this.httpOptionsResponseHeaders,
-  }) : name = name ?? 'Server $serverId',
-       _databasePoolManager = databasePoolManager,
-       _securityContext = securityContext,
-       _port = port;
+    List<Middleware>? middleware,
+  })  : name = name ?? 'Server $serverId',
+        _databasePoolManager = databasePoolManager,
+        _securityContext = securityContext,
+        _port = port,
+        _middleware =
+            middleware != null ? List.unmodifiable(middleware) : const [];
 
   late final _app = RelicApp()..inject(this);
 
@@ -132,9 +146,18 @@ class Server implements RouterInjectable {
     if (serverpod.config.loggingMode == ServerpodLoggingMode.verbose) {
       router.use('/', _verboseLogging);
     }
+
+    // Register core middleware first to ensure they wrap all user middleware
     router
       ..use('/', _headers)
-      ..use('/', _reportException)
+      ..use('/', _reportException);
+
+    // Register user-provided middleware
+    for (var middleware in _middleware) {
+      router.use('/', middleware);
+    }
+
+    router
       ..get('/', _health)
       ..get(
         '/websocket',
