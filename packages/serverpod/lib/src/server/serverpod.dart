@@ -383,7 +383,6 @@ class Serverpod {
       _initializeServerpod(
         args,
         config: config,
-        experimentalFeatures: experimentalFeatures,
       );
     } on ExitException catch (e) {
       if (e.message.isNotEmpty) {
@@ -399,7 +398,6 @@ class Serverpod {
   void _initializeServerpod(
     List<String> args, {
     ServerpodConfig? config,
-    ExperimentalFeatures? experimentalFeatures,
   }) {
     stdout.writeln(
       'SERVERPOD version: $serverpodVersion, dart: ${Platform.version}, time: ${DateTime.now().toUtc()}',
@@ -524,6 +522,9 @@ class Serverpod {
       redisController,
     );
 
+    // Extract middleware from experimental API for logging and passing to Server
+    final middleware = _experimental.middleware;
+
     server = Server(
       serverpod: this,
       serverId: serverId,
@@ -538,7 +539,16 @@ class Serverpod {
       httpResponseHeaders: httpResponseHeaders,
       httpOptionsResponseHeaders: httpOptionsResponseHeaders,
       securityContext: _securityContextConfig?.apiServer,
+      middleware: middleware,
     );
+
+    // Log middleware configuration
+    if (middleware != null && middleware.isNotEmpty) {
+      logVerbose(
+        'Experimental middleware enabled: ${middleware.length} middleware registered',
+      );
+    }
+
     endpoints.initializeEndpoints(server);
 
     _internalSession = InternalSession(server: server, enableLogging: false);
@@ -1282,6 +1292,11 @@ class ExperimentalApi {
 
   final TaskManagerImpl _shutdownTasks;
 
+  /// List of registered middleware from [ExperimentalFeatures].
+  ///
+  /// This is `null` if no middleware was configured.
+  final List<Middleware>? middleware;
+
   /// Shutdown tasks can be used to perform cleanup operations before the server
   /// is shut down. The tasks will be executed asynchronously after the server
   /// has received the shutdown signal.
@@ -1295,11 +1310,12 @@ class ExperimentalApi {
   ExperimentalApi._({
     ServerpodConfig? config,
     ExperimentalFeatures? experimentalFeatures,
-  }) : _eventDispatcher = DiagnosticEventDispatcher(
-         experimentalFeatures?.diagnosticEventHandlers ?? const [],
-         timeout: config?.experimentalDiagnosticHandlerTimeout,
-       ),
-       _shutdownTasks = TaskManagerImpl();
+  })  : _eventDispatcher = DiagnosticEventDispatcher(
+          experimentalFeatures?.diagnosticEventHandlers ?? const [],
+          timeout: config?.experimentalDiagnosticHandlerTimeout,
+        ),
+        middleware = experimentalFeatures?.middleware,
+        _shutdownTasks = TaskManagerImpl();
 
   /// Application method for submitting a diagnostic event
   /// to registered event handlers.

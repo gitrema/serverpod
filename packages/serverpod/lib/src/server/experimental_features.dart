@@ -48,17 +48,16 @@ class ExperimentalFeatures {
   /// ### Using Handler wrapping
   /// ```dart
   /// Middleware myMiddleware(Handler innerHandler) {
-  ///   return (RequestContext ctx) async {
+  ///   return (Request req) async {
   ///     // Pre-processing
-  ///     final request = ctx.request;
-  ///     print('Before: ${request.method}');
+  ///     print('Before: ${req.method}');
   ///
   ///     // Call next handler
-  ///     final result = await innerHandler(ctx);
+  ///     final result = await innerHandler(req);
   ///
   ///     // Post-processing
-  ///     if (result is ResponseContext) {
-  ///       print('After: ${result.response.statusCode}');
+  ///     if (result is Response) {
+  ///       print('After: ${result.statusCode}');
   ///     }
   ///
   ///     return result;
